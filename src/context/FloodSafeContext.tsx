@@ -132,9 +132,15 @@ const DEFAULT_SIMULATOR_STATE: SimulatorState = {
 
 function getStorageItem<T>(key: string, defaultValue: T): T {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return defaultValue;
+    }
     const saved = localStorage.getItem(key);
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      if (parsed !== null && parsed !== undefined) {
+        return parsed;
+      }
     }
   } catch (err) {
     console.warn(`Error reading localStorage for ${key}:`, err);
@@ -144,7 +150,9 @@ function getStorageItem<T>(key: string, defaultValue: T): T {
 
 function setStorageItem<T>(key: string, value: T): void {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
   } catch (err) {
     console.warn(`Error writing localStorage for ${key}:`, err);
   }
@@ -159,32 +167,53 @@ export const FloodSafeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
   const [isAudioAlertPlaying, setIsAudioAlertPlaying] = useState<boolean>(false);
 
-  // Checklists
-  const [prepareChecklist, setPrepareChecklist] = useState<ChecklistItem[]>(() =>
-    getStorageItem(STORAGE_KEYS.PREPARE, INITIAL_PREPARE_CHECKLIST)
-  );
-  const [kitItems, setKitItems] = useState<KitItem[]>(() =>
-    getStorageItem(STORAGE_KEYS.KIT, INITIAL_KIT_ITEMS)
-  );
-  const [evacChecklist, setEvacChecklist] = useState<ChecklistItem[]>(() =>
-    getStorageItem(STORAGE_KEYS.EVAC, INITIAL_EVACUATION_CHECKLIST)
-  );
-  const [recoveryChecklist, setRecoveryChecklist] = useState<ChecklistItem[]>(() =>
-    getStorageItem(STORAGE_KEYS.RECOVERY, INITIAL_RECOVERY_CHECKLIST)
-  );
+  // Checklists with array validation
+  const [prepareChecklist, setPrepareChecklist] = useState<ChecklistItem[]>(() => {
+    const saved = getStorageItem(STORAGE_KEYS.PREPARE, INITIAL_PREPARE_CHECKLIST);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_PREPARE_CHECKLIST;
+  });
 
-  // Simulator
-  const [simulatorState, setSimulatorState] = useState<SimulatorState>(() =>
-    getStorageItem(STORAGE_KEYS.SIMULATOR, DEFAULT_SIMULATOR_STATE)
-  );
+  const [kitItems, setKitItems] = useState<KitItem[]>(() => {
+    const saved = getStorageItem(STORAGE_KEYS.KIT, INITIAL_KIT_ITEMS);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_KIT_ITEMS;
+  });
 
-  // Plans & Contacts
-  const [familyPlan, setFamilyPlan] = useState<FamilySafetyPlan>(() =>
-    getStorageItem(STORAGE_KEYS.FAMILY_PLAN, DEFAULT_FAMILY_PLAN)
-  );
-  const [contacts, setContacts] = useState<EmergencyContacts>(() =>
-    getStorageItem(STORAGE_KEYS.CONTACTS, DEFAULT_CONTACTS)
-  );
+  const [evacChecklist, setEvacChecklist] = useState<ChecklistItem[]>(() => {
+    const saved = getStorageItem(STORAGE_KEYS.EVAC, INITIAL_EVACUATION_CHECKLIST);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_EVACUATION_CHECKLIST;
+  });
+
+  const [recoveryChecklist, setRecoveryChecklist] = useState<ChecklistItem[]>(() => {
+    const saved = getStorageItem(STORAGE_KEYS.RECOVERY, INITIAL_RECOVERY_CHECKLIST);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_RECOVERY_CHECKLIST;
+  });
+
+  // Simulator with schema validation
+  const [simulatorState, setSimulatorState] = useState<SimulatorState>(() => {
+    const saved = getStorageItem(STORAGE_KEYS.SIMULATOR, DEFAULT_SIMULATOR_STATE);
+    if (
+      saved &&
+      typeof saved.currentScenarioIndex === 'number' &&
+      saved.currentScenarioIndex >= 0 &&
+      saved.currentScenarioIndex < SIMULATOR_SCENARIOS.length &&
+      saved.userAnswers &&
+      typeof saved.userAnswers === 'object'
+    ) {
+      return saved;
+    }
+    return DEFAULT_SIMULATOR_STATE;
+  });
+
+  // Plans & Contacts with merged defaults
+  const [familyPlan, setFamilyPlan] = useState<FamilySafetyPlan>(() => {
+    const saved = getStorageItem(STORAGE_KEYS.FAMILY_PLAN, DEFAULT_FAMILY_PLAN);
+    return { ...DEFAULT_FAMILY_PLAN, ...(saved || {}) };
+  });
+
+  const [contacts, setContacts] = useState<EmergencyContacts>(() => {
+    const saved = getStorageItem(STORAGE_KEYS.CONTACTS, DEFAULT_CONTACTS);
+    return { ...DEFAULT_CONTACTS, ...(saved || {}) };
+  });
 
   // Save changes to storage
   useEffect(() => {
@@ -399,8 +428,10 @@ export const FloodSafeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Simulator safe answers: 20%
   const prepWeight = (prepareProgress / 100) * 30;
   const kitWeight = (kitReadiness / 100) * 30;
+  const groupNameStr = typeof familyPlan?.groupName === 'string' ? familyPlan.groupName.trim() : '';
+  const primaryLocStr = typeof familyPlan?.primaryLocation === 'string' ? familyPlan.primaryLocation.trim() : '';
   const familyPlanWeight =
-    familyPlan.isSaved && familyPlan.groupName.trim() && familyPlan.primaryLocation.trim() ? 20 : 0;
+    Boolean(familyPlan?.isSaved && groupNameStr.length > 0 && primaryLocStr.length > 0) ? 20 : 0;
 
   // Simulator score out of 10
   const simWeight = (simulatorState.score / SIMULATOR_SCENARIOS.length) * 20;
@@ -434,7 +465,7 @@ export const FloodSafeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     missingItems.push('Complete emergency kit items (currently ' + kitReadiness + '%)');
   }
 
-  if (familyPlan.isSaved && familyPlan.groupName.trim()) {
+  if (familyPlan?.isSaved && groupNameStr.length > 0) {
     completedItems.push('Family safety plan created and saved');
   } else {
     missingItems.push('Create and save family safety plan');

@@ -24,6 +24,7 @@ export const FamilyPlanView: React.FC = () => {
   } = useFloodSafe();
 
   const [savedSuccessNotice, setSavedSuccessNotice] = useState(false);
+  const [copiedNotice, setCopiedNotice] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,10 +34,33 @@ export const FamilyPlanView: React.FC = () => {
   };
 
   const handlePrint = () => {
-    window.print();
+    try {
+      window.print();
+    } catch (e) {
+      console.warn('Print blocked by frame environment:', e);
+    }
   };
 
-  const isConfigured = familyPlan.isSaved && familyPlan.groupName.trim().length > 0;
+  const handleCopySummary = () => {
+    try {
+      const summaryText = `FLOODSAFE FAMILY SAFETY PLAN
+Group / Family: ${familyPlan.groupName || 'Household'} (${familyPlan.peopleCount || 1} people)
+Primary Meeting Site: ${familyPlan.primaryLocation || 'None'}
+Backup Meeting Site: ${familyPlan.backupLocation || 'None'}
+Emergency Contact: ${familyPlan.emergencyContact || 'None'}
+Medical/Accessibility: ${familyPlan.medicalNeeds || 'None'}`;
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(summaryText);
+        setCopiedNotice(true);
+        setTimeout(() => setCopiedNotice(false), 3000);
+      }
+    } catch (e) {
+      console.warn('Clipboard access restricted:', e);
+    }
+  };
+
+  const groupNameStr = typeof familyPlan?.groupName === 'string' ? familyPlan.groupName.trim() : '';
+  const isConfigured = Boolean(familyPlan?.isSaved && groupNameStr.length > 0);
 
   return (
     <div className="space-y-8 py-4 max-w-4xl mx-auto">
@@ -69,9 +93,17 @@ export const FamilyPlanView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleCopySummary}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-emerald-700/60 text-emerald-300 hover:text-white text-xs font-bold transition"
+            >
+              <span>{copiedNotice ? '✓ Copied!' : 'Copy Plan'}</span>
+            </button>
             <button
               onClick={handlePrint}
+              type="button"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-emerald-700/60 text-emerald-300 hover:text-white text-xs font-bold transition"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -79,6 +111,7 @@ export const FamilyPlanView: React.FC = () => {
             </button>
             <button
               onClick={resetFamilyPlan}
+              type="button"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
             >
               <RotateCcw className="w-3.5 h-3.5" />

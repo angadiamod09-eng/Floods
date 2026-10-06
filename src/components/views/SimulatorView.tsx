@@ -25,8 +25,15 @@ export const SimulatorView: React.FC = () => {
     setActiveTab,
   } = useFloodSafe();
 
-  const currentScenario = SIMULATOR_SCENARIOS[simulatorState.currentScenarioIndex];
-  const userChoice = simulatorState.userAnswers[currentScenario.id];
+  const safeIndex =
+    typeof simulatorState?.currentScenarioIndex === 'number' &&
+    simulatorState.currentScenarioIndex >= 0 &&
+    simulatorState.currentScenarioIndex < SIMULATOR_SCENARIOS.length
+      ? simulatorState.currentScenarioIndex
+      : 0;
+
+  const currentScenario = SIMULATOR_SCENARIOS[safeIndex] || SIMULATOR_SCENARIOS[0];
+  const userChoice = simulatorState?.userAnswers?.[currentScenario.id];
   const isAnswered = Boolean(userChoice);
 
   // Stats calculation
@@ -36,10 +43,10 @@ export const SimulatorView: React.FC = () => {
   let answeredCount = 0;
 
   SIMULATOR_SCENARIOS.forEach((scenario) => {
-    const ans = simulatorState.userAnswers[scenario.id];
+    const ans = simulatorState?.userAnswers?.[scenario.id];
     if (ans) {
       answeredCount += 1;
-      const opt = scenario.options.find((o) => o.id === ans);
+      const opt = scenario.options?.find((o) => o.id === ans);
       if (opt?.isSafe) {
         correctCount += 1;
       } else {
@@ -49,7 +56,7 @@ export const SimulatorView: React.FC = () => {
   });
 
   const selectedOption = isAnswered
-    ? currentScenario.options.find((opt) => opt.id === userChoice)
+    ? currentScenario.options?.find((opt) => opt.id === userChoice)
     : null;
 
   const isSafeAction = selectedOption?.isSafe ?? false;

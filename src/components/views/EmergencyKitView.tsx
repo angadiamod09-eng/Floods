@@ -24,11 +24,13 @@ export const EmergencyKitView: React.FC = () => {
     setActiveTab,
   } = useFloodSafe();
 
-  const selectedItems = kitItems.filter((i) => i.selected);
+  const safeKitItems = Array.isArray(kitItems) ? kitItems : [];
+  const selectedItems = safeKitItems.filter((i) => i?.selected);
+  const safeMissing = Array.isArray(missingKitItems) ? missingKitItems : [];
 
   const handleSelectAll = () => {
-    kitItems.forEach((i) => {
-      if (!i.selected) toggleKitItem(i.id);
+    safeKitItems.forEach((i) => {
+      if (!i?.selected) toggleKitItem(i.id);
     });
   };
 
@@ -105,14 +107,14 @@ export const EmergencyKitView: React.FC = () => {
         </div>
 
         {/* Missing Items Warning or 100% Celebration */}
-        {missingKitItems.length > 0 ? (
+        {safeMissing.length > 0 ? (
           <div className="bg-amber-950/40 border border-amber-800/60 rounded-xl p-4 text-xs space-y-2">
             <div className="flex items-center gap-2 text-amber-300 font-bold uppercase tracking-wider">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Missing Essential Items ({missingKitItems.length}):</span>
+              <span>Missing Essential Items ({safeMissing.length}):</span>
             </div>
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {missingKitItems.map((item) => (
+              {safeMissing.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => toggleKitItem(item.id)}

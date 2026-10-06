@@ -11,6 +11,7 @@ let osc1: OscillatorNode | null = null;
 let osc2: OscillatorNode | null = null;
 let gainNode: GainNode | null = null;
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 let isPlaying = false;
 
 export function isAlertSoundPlaying(): boolean {
@@ -19,11 +20,21 @@ export function isAlertSoundPlaying(): boolean {
 
 export function startAlertSound(onStateChange?: (playing: boolean) => void): boolean {
   try {
+    if (cleanupTimer) {
+      clearTimeout(cleanupTimer);
+      cleanupTimer = null;
+    }
+
     if (isPlaying) {
       return true;
     }
 
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioContextClass =
+      typeof window !== 'undefined'
+        ? window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+        : null;
+
     if (!AudioContextClass) {
       console.warn('Web Audio API not supported in this browser environment.');
       return false;
@@ -34,22 +45,25 @@ export function startAlertSound(onStateChange?: (playing: boolean) => void): boo
     }
 
     if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+      audioCtx.resume().catch((err) => {
+        console.warn('AudioContext resume prevented:', err);
+      });
     }
 
     gainNode = audioCtx.createGain();
-    gainNode.gain.setValueAtTime(0.18, audioCtx.currentTime); // Safe, controlled volume
+    const now = audioCtx.currentTime;
+    gainNode.gain.setValueAtTime(0.18, now); // Safe, controlled volume
     gainNode.connect(audioCtx.destination);
 
     // Primary warning frequency: alternating between 880Hz and 660Hz pulses
     osc1 = audioCtx.createOscillator();
     osc1.type = 'sawtooth';
-    osc1.frequency.setValueAtTime(880, audioCtx.currentTime);
+    osc1.frequency.setValueAtTime(880, now);
 
     // Sub-tone for audible presence
     osc2 = audioCtx.createOscillator();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(440, audioCtx.currentTime);
+    osc2.frequency.setValueAtTime(440, now);
 
     osc1.connect(gainNode);
     osc2.connect(gainNode);
@@ -61,13 +75,17 @@ export function startAlertSound(onStateChange?: (playing: boolean) => void): boo
     let toggle = false;
     // Modulate alert tones rhythmically every 350ms
     intervalId = setInterval(() => {
-      if (!audioCtx || !osc1 || !gainNode) return;
-      const now = audioCtx.currentTime;
-      toggle = !toggle;
-      const freq = toggle ? 880 : 660;
-      osc1.frequency.setValueAtTime(freq, now);
-      // Soft pulsing gain envelope
-      gainNode.gain.setValueAtTime(toggle ? 0.22 : 0.08, now);
+      try {
+        if (!audioCtx || !osc1 || !gainNode) return;
+        const tickTime = audioCtx.currentTime;
+        toggle = !toggle;
+        const freq = toggle ? 880 : 660;
+        osc1.frequency.setValueAtTime(freq, tickTime);
+        // Soft pulsing gain envelope
+        gainNode.gain.setValueAtTime(toggle ? 0.22 : 0.08, tickTime);
+      } catch (e) {
+        // Safe guard against audio ticks after teardown
+      }
     }, 350);
 
     onStateChange?.(true);
@@ -88,12 +106,17 @@ export function stopAlertSound(onStateChange?: (playing: boolean) => void): void
     }
 
     if (gainNode && audioCtx) {
-      // Gentle fade out to avoid clicks
-      gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.05);
+      const now = audioCtx.currentTime;
+      // Use linearRampToValueAtTime which never throws InvalidAccessError on zero
+      gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+      gainNode.gain.linearRampToValueAtTime(0.00001, now + 0.05);
     }
 
-    setTimeout(() => {
+    if (cleanupTimer) {
+      clearTimeout(cleanupTimer);
+    }
+
+    cleanupTimer = setTimeout(() => {
       try {
         if (osc1) {
           osc1.stop();
@@ -110,8 +133,9 @@ export function stopAlertSound(onStateChange?: (playing: boolean) => void): void
           gainNode = null;
         }
       } catch (e) {
-        // Ignore node teardown errors
+        // Safe ignore
       }
+      cleanupTimer = null;
     }, 60);
 
     isPlaying = false;

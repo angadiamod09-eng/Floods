@@ -18,6 +18,7 @@ import { EmergencyContactsView } from './components/views/EmergencyContactsView'
 import { RecoveryView } from './components/views/RecoveryView';
 import { PreparednessScoreView } from './components/views/PreparednessScoreView';
 import { AlertModeView } from './components/views/AlertModeView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const MainContent: React.FC = () => {
   const { activeTab } = useFloodSafe();
@@ -64,8 +65,10 @@ const MainContent: React.FC = () => {
 
 export default function App() {
   return (
-    <FloodSafeProvider>
-      <MainContent />
-    </FloodSafeProvider>
+    <ErrorBoundary>
+      <FloodSafeProvider>
+        <MainContent />
+      </FloodSafeProvider>
+    </ErrorBoundary>
   );
 }
