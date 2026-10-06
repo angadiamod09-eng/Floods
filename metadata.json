@@ -1,0 +1,6 @@
+{
+  "name": "FLOODSAFE – Flood Emergency Response & Preparedness System",
+  "description": "Practical flood emergency preparedness, interactive response simulator, kit builder, evacuation guide, family safety planner, and recovery protocols.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
